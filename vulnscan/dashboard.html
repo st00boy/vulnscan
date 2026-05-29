@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VulnScan Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #070b0f;
+    --surface: #0d1318;
+    --border:  #1a2535;
+    --accent:  #00f5a0;
+    --red:     #ff3b5c;
+    --yellow:  #f5c400;
+    --blue:    #2196f3;
+    --dim:     #3a4a5a;
+    --text:    #c8d8e8;
+    --subtext: #5a7a8a;
+    --mono:    'Share Tech Mono', monospace;
+    --ui:      'Rajdhani', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--ui); min-height:100vh; }
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image: linear-gradient(rgba(0,245,160,0.02) 1px,transparent 1px),
+                      linear-gradient(90deg,rgba(0,245,160,0.02) 1px,transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  header {
+    position:sticky; top:0; z-index:100;
+    background:rgba(7,11,15,0.95); backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+    padding:0 28px; height:56px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .logo { font-family:var(--mono); font-size:1.1rem; color:var(--accent); letter-spacing:2px; display:flex; align-items:center; gap:10px; }
+  .dot  { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+  .header-right { font-family:var(--mono); font-size:0.82rem; color:var(--subtext); }
+  .header-right a { color:var(--accent); text-decoration:none; }
+
+  .container { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:28px 28px 60px; }
+
+  /* DEMO BANNER */
+  .demo-bar {
+    background:rgba(0,245,160,0.05); border:1px solid rgba(0,245,160,0.15);
+    border-radius:8px; padding:12px 18px; margin-bottom:24px;
+    font-family:var(--mono); font-size:0.82rem; color:var(--accent);
+  }
+
+  /* SCAN META */
+  .scan-meta {
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:14px; margin-bottom:24px;
+    padding:18px 22px; background:var(--surface);
+    border:1px solid var(--border); border-radius:10px;
+  }
+  .scan-target { font-family:var(--mono); font-size:1rem; color:var(--accent); }
+  .scan-target span { color:var(--subtext); font-size:0.78rem; margin-right:8px; }
+  .scan-time { font-family:var(--mono); font-size:0.78rem; color:var(--subtext); }
+
+  /* STATS */
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  @media(max-width:700px){ .stats{grid-template-columns:repeat(2,1fr);} }
+  .stat-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:20px 22px; position:relative; overflow:hidden; transition:transform 0.2s;
+  }
+  .stat-card:hover { transform:translateY(-2px); }
+  .stat-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; }
+  .stat-card.vuln::after  { background:var(--red);    box-shadow:0 0 12px var(--red); }
+  .stat-card.clean::after { background:var(--accent); box-shadow:0 0 12px var(--accent); }
+  .stat-card.total::after { background:var(--blue);   box-shadow:0 0 12px var(--blue); }
+  .stat-card.err::after   { background:var(--yellow); box-shadow:0 0 12px var(--yellow); }
+  .stat-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:2px; color:var(--subtext); margin-bottom:10px; font-family:var(--mono); }
+  .stat-num   { font-family:var(--mono); font-size:2.5rem; line-height:1; }
+  .stat-card.vuln  .stat-num { color:var(--red); }
+  .stat-card.clean .stat-num { color:var(--accent); }
+  .stat-card.total .stat-num { color:var(--blue); }
+  .stat-card.err   .stat-num { color:var(--yellow); }
+
+  /* BAR */
+  .bar-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 22px; margin-bottom:24px; }
+  .bar-wrap h3 { font-size:0.72rem; text-transform:uppercase; letter-spacing:2px; color:var(--subtext); font-family:var(--mono); margin-bottom:14px; }
+  .sev-bar { height:10px; border-radius:5px; background:var(--border); overflow:hidden; display:flex; }
+  .sev-fill { height:100%; transition:width 0.8s cubic-bezier(.4,0,.2,1); }
+  .sev-fill.v { background:var(--red); }
+  .sev-fill.c { background:var(--accent); }
+  .sev-fill.e { background:var(--yellow); }
+  .sev-leg { display:flex; gap:20px; margin-top:10px; font-family:var(--mono); font-size:0.78rem; color:var(--subtext); }
+  .sev-leg span { display:flex; align-items:center; gap:6px; }
+  .sev-dot { width:8px; height:8px; border-radius:50%; }
+
+  /* FILTERS */
+  .filter-bar { display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
+  .fbtn {
+    font-family:var(--mono); font-size:0.76rem; padding:6px 16px; border-radius:20px;
+    border:1px solid var(--border); background:transparent; color:var(--subtext);
+    cursor:pointer; transition:all 0.2s; text-transform:uppercase; letter-spacing:1px;
+  }
+  .fbtn:hover,.fbtn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,245,160,0.06); }
+  .search { margin-left:auto; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 14px; color:var(--text); font-family:var(--mono); font-size:0.82rem; outline:none; width:210px; transition:border-color 0.2s; }
+  .search:focus { border-color:var(--accent); }
+  .search::placeholder { color:var(--dim); }
+
+  /* TABLE */
+  .tbl-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; }
+  thead tr { background:rgba(0,0,0,0.3); }
+  th { text-align:left; padding:12px 18px; font-family:var(--mono); font-size:0.7rem; text-transform:uppercase; letter-spacing:2px; color:var(--subtext); border-bottom:1px solid var(--border); font-weight:400; }
+  tbody tr { border-bottom:1px solid rgba(26,37,53,0.6); transition:background 0.15s; }
+  tbody tr:hover { background:rgba(0,245,160,0.02); }
+  tbody tr:last-child { border-bottom:none; }
+  td { padding:13px 18px; font-size:0.87rem; vertical-align:top; }
+  .td-mod  { font-family:var(--mono); font-size:0.78rem; color:var(--blue); white-space:nowrap; }
+  .td-name { font-weight:600; }
+  .badge   { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:4px; font-family:var(--mono); font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; white-space:nowrap; }
+  .bdot    { width:6px; height:6px; border-radius:50%; }
+  .bv { background:rgba(255,59,92,0.1);  color:var(--red);    border:1px solid rgba(255,59,92,0.25); }
+  .bc { background:rgba(0,245,160,0.07); color:var(--accent); border:1px solid rgba(0,245,160,0.2); }
+  .be { background:rgba(245,196,0,0.08); color:var(--yellow); border:1px solid rgba(245,196,0,0.2); }
+  .bv .bdot { background:var(--red);    box-shadow:0 0 6px var(--red); }
+  .bc .bdot { background:var(--accent); box-shadow:0 0 6px var(--accent); }
+  .be .bdot { background:var(--yellow); box-shadow:0 0 6px var(--yellow); }
+  .td-sum { color:var(--subtext); font-size:0.82rem; max-width:260px; }
+  .fl { list-style:none; display:flex; flex-direction:column; gap:4px; max-width:360px; }
+  .fl li { font-family:var(--mono); font-size:0.73rem; color:var(--yellow); padding:3px 8px; background:rgba(245,196,0,0.05); border-left:2px solid var(--yellow); border-radius:0 3px 3px 0; word-break:break-all; }
+  tr.rv td:first-child { border-left:3px solid var(--red); }
+  tr.rc td:first-child { border-left:3px solid var(--accent); }
+  tr.re td:first-child { border-left:3px solid var(--yellow); }
+  .empty { text-align:center; padding:60px; color:var(--subtext); font-family:var(--mono); font-size:0.88rem; }
+  @keyframes rowIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+  tbody tr { animation:rowIn 0.25s ease both; }
+
+  footer { position:relative; z-index:1; text-align:center; padding:20px; font-family:var(--mono); font-size:0.74rem; color:var(--dim); border-top:1px solid var(--border); }
+  footer a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="dot"></div>VULNSCAN // DASHBOARD</div>
+  <div class="header-right">by <a href="https://github.com/st00boy" target="_blank">st00boy</a></div>
+</header>
+
+<div class="container">
+
+  <div class="demo-bar">
+    ⚡ This dashboard displays demo scan data. Run <strong>python3 vulnscan.py</strong> to generate real reports, then open the HTML report from the <strong>reports/</strong> folder.
+  </div>
+
+  <div class="scan-meta">
+    <div class="scan-target"><span>TARGET</span>http://demo-target.com</div>
+    <div class="scan-time">Scan: 20250527_153045</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card vuln">  <div class="stat-label">Vulnerable</div><div class="stat-num" id="sVuln">0</div></div>
+    <div class="stat-card clean"> <div class="stat-label">Clean</div>     <div class="stat-num" id="sClean">0</div></div>
+    <div class="stat-card total"> <div class="stat-label">Modules</div>   <div class="stat-num" id="sTotal">0</div></div>
+    <div class="stat-card err">   <div class="stat-label">Errors</div>    <div class="stat-num" id="sErr">0</div></div>
+  </div>
+
+  <div class="bar-wrap">
+    <h3>Result Distribution</h3>
+    <div class="sev-bar">
+      <div class="sev-fill v" id="bV" style="width:0%"></div>
+      <div class="sev-fill c" id="bC" style="width:0%"></div>
+      <div class="sev-fill e" id="bE" style="width:0%"></div>
+    </div>
+    <div class="sev-leg">
+      <span><div class="sev-dot" style="background:var(--red)"></div>Vulnerable</span>
+      <span><div class="sev-dot" style="background:var(--accent)"></div>Clean</span>
+      <span><div class="sev-dot" style="background:var(--yellow)"></div>Errors</span>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <button class="fbtn active" data-f="all">All</button>
+    <button class="fbtn" data-f="vuln">Vulnerable</button>
+    <button class="fbtn" data-f="clean">Clean</button>
+    <button class="fbtn" data-f="error">Errors</button>
+    <input class="search" type="text" id="searchBox" placeholder="Search modules...">
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Module</th><th>Vulnerability</th><th>Status</th><th>Summary</th><th>Findings</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<footer>
+  VulnScan Dashboard &nbsp;·&nbsp; by <a href="https://github.com/st00boy" target="_blank">st00boy</a>
+  &nbsp;·&nbsp; ⚠ Use only on systems you own or have written permission to test.
+</footer>
+
+<script>
+  const DATA = [
+    { module:"xss",            name:"XSS (Stored & Reflected)",   result:{ vulnerable:true,  summary:"Reflected XSS in param 'q'", findings:["Reflected XSS: param=q → payload reflected in response"] } },
+    { module:"sqli",           name:"SQL Injection",              result:{ vulnerable:true,  summary:"Error-based SQLi in param 'id'", findings:["SQLi: param=id | Sig: 'you have an error in your sql syntax'"] } },
+    { module:"ssrf",           name:"SSRF",                       result:{ vulnerable:false, summary:"No SSRF indicators found" } },
+    { module:"csrf",           name:"CSRF",                       result:{ vulnerable:true,  summary:"CSRF tokens missing on forms", findings:["No CSRF token at /login","Cookie 'session' missing SameSite"] } },
+    { module:"idor",           name:"IDOR",                       result:{ vulnerable:false, summary:"No obvious IDOR found" } },
+    { module:"lfi",            name:"Local File Inclusion",       result:{ vulnerable:false, summary:"No LFI indicators found" } },
+    { module:"open_redirect",  name:"Open Redirect",              result:{ vulnerable:false, summary:"No open redirect found" } },
+    { module:"host_header",    name:"Host Header Injection",      result:{ vulnerable:true,  summary:"Host header reflected in body", findings:["Injected 'evil.com' appeared in response body"] } },
+    { module:"crlf",           name:"CRLF Injection",             result:{ vulnerable:false, summary:"No CRLF injection found" } },
+    { module:"log4j",          name:"Log4Shell",                  result:{ vulnerable:false, summary:"No Java indicators found" } },
+    { module:"file_upload",    name:"File Upload",                result:{ vulnerable:true,  summary:"Upload accepted .php file", findings:["shell.php accepted at /upload with HTTP 200"] } },
+    { module:"oauth",          name:"OAuth Exploitation",         result:{ vulnerable:false, summary:"No OAuth misconfigurations found" } },
+    { module:"account_takeover",name:"Account Takeover",          result:{ vulnerable:true,  summary:"User enumeration possible", findings:["Different responses for valid vs invalid usernames at /login"] } },
+    { module:"2fa_bypass",     name:"2FA Bypass",                 result:{ error:"Connection refused at /2fa" } },
+    { module:"info_disclosure",name:"Information Disclosure",     result:{ vulnerable:true,  summary:".env file exposed", findings:["API_KEY found at /.env","/.git/HEAD accessible"] } },
+    { module:"cache_poison",   name:"Cache Poisoning",            result:{ vulnerable:false, summary:"No cache poisoning found" } },
+    { module:"clickjacking",   name:"Clickjacking",               result:{ vulnerable:true,  summary:"No X-Frame-Options header", findings:["Missing X-Frame-Options AND no frame-ancestors in CSP"] } },
+    { module:"proto_pollution",name:"Prototype Pollution",        result:{ vulnerable:false, summary:"No prototype pollution detected" } },
+    { module:"subdomain_takeover",name:"Subdomain Takeover",      result:{ vulnerable:false, summary:"No takeover opportunities" } },
+    { module:"github_exposure",name:"GitHub Exposure",            result:{ vulnerable:true,  summary:".git/ exposed", findings:["Git repo at /.git/HEAD — source code downloadable"] } },
+    { module:"email_spoofing", name:"Email Spoofing",             result:{ vulnerable:true,  summary:"Missing DMARC record", findings:["No DMARC record for demo-target.com"] } },
+    { module:"ddos",           name:"DDoS Surface",               result:{ vulnerable:false, summary:"No obvious surface issues" } },
+    { module:"cloud_rce",      name:"Cloud RCE",                  result:{ vulnerable:false, summary:"No cloud metadata exposed" } },
+    { module:"api_exposure",   name:"API Exposure",               result:{ vulnerable:true,  summary:"Swagger docs exposed", findings:["Swagger UI at /swagger-ui.html","Unauthenticated /api/users"] } },
+    { module:"business_logic", name:"Business Logic",             result:{ vulnerable:false, summary:"No automated flaws found" } },
+  ];
+
+  let activeFilter = 'all';
+
+  function init() {
+    const nVuln  = DATA.filter(r => r.result.vulnerable).length;
+    const nErr   = DATA.filter(r => r.result.error).length;
+    const nClean = DATA.length - nVuln - nErr;
+    const nTotal = DATA.length;
+
+    document.getElementById('sVuln').textContent  = nVuln;
+    document.getElementById('sClean').textContent = nClean;
+    document.getElementById('sTotal').textContent = nTotal;
+    document.getElementById('sErr').textContent   = nErr;
+
+    setTimeout(() => {
+      document.getElementById('bV').style.width = (nVuln/nTotal*100)+'%';
+      document.getElementById('bC').style.width = (nClean/nTotal*100)+'%';
+      document.getElementById('bE').style.width = (nErr/nTotal*100)+'%';
+    }, 120);
+
+    renderTable();
+  }
+
+  function renderTable() {
+    const search = document.getElementById('searchBox').value.toLowerCase();
+    const tbody  = document.getElementById('tbody');
+    tbody.innerHTML = '';
+
+    const filtered = DATA.filter(r => {
+      const isVuln  = r.result.vulnerable;
+      const isErr   = !!r.result.error;
+      const isClean = !isVuln && !isErr;
+      const matchF  =
+        activeFilter === 'all'   ||
+        (activeFilter === 'vuln'  && isVuln)  ||
+        (activeFilter === 'clean' && isClean) ||
+        (activeFilter === 'error' && isErr);
+      const matchS  =
+        !search ||
+        r.module.toLowerCase().includes(search) ||
+        r.name.toLowerCase().includes(search);
+      return matchF && matchS;
+    });
+
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty">// no results match filter</div></td></tr>`;
+      return;
+    }
+
+    filtered.forEach((r, i) => {
+      const res = r.result;
+      let rowC, badgeC, badgeL;
+      if (res.error)           { rowC='re'; badgeC='be'; badgeL='ERROR'; }
+      else if (res.vulnerable) { rowC='rv'; badgeC='bv'; badgeL='VULNERABLE'; }
+      else                     { rowC='rc'; badgeC='bc'; badgeL='CLEAN'; }
+
+      const findings = (res.findings||[]).map(f=>`<li>${esc(f)}</li>`).join('');
+      const tr = document.createElement('tr');
+      tr.className = rowC;
+      tr.style.animationDelay = (i*0.025)+'s';
+      tr.innerHTML = `
+        <td class="td-mod">${esc(r.module)}</td>
+        <td class="td-name">${esc(r.name)}</td>
+        <td><span class="badge ${badgeC}"><div class="bdot"></div>${badgeL}</span></td>
+        <td class="td-sum">${esc(res.summary||res.error||'—')}</td>
+        <td>${findings?`<ul class="fl">${findings}</ul>`:`<span style="color:var(--dim);font-family:var(--mono);font-size:0.78rem">—</span>`}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.querySelectorAll('.fbtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.f;
+      renderTable();
+    });
+  });
+
+  document.getElementById('searchBox').addEventListener('input', renderTable);
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>
